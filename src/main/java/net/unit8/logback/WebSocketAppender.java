@@ -3,14 +3,11 @@ package net.unit8.logback;
 import ch.qos.logback.classic.net.LoggingEventPreSerializationTransformer;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.AppenderBase;
-import ch.qos.logback.core.spi.PreSerializationTransformer;
+import ch.qos.logback.core.encoder.Encoder;
 import ch.qos.logback.core.util.CloseUtil;
 
 import javax.websocket.*;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
-import java.io.Serializable;
+import java.io.*;
 import java.net.URI;
 import java.nio.ByteBuffer;
 
@@ -18,11 +15,22 @@ import java.nio.ByteBuffer;
  * @author kawasima
  */
 public class WebSocketAppender extends AppenderBase<ILoggingEvent> {
-    private static final PreSerializationTransformer<ILoggingEvent> pst =
-            new LoggingEventPreSerializationTransformer();
-
     private URI serverUri;
     private Session session;
+
+    /**
+     * It is the encoder which is ultimately responsible for writing the event to
+     * an {@link OutputStream}.
+     */
+    protected Encoder<ILoggingEvent> encoder;
+
+    public Encoder<ILoggingEvent> getEncoder() {
+        return encoder;
+    }
+
+    public void setEncoder(Encoder<ILoggingEvent> encoder) {
+        this.encoder = encoder;
+    }
 
     private void started() {
         super.start();
@@ -62,10 +70,9 @@ public class WebSocketAppender extends AppenderBase<ILoggingEvent> {
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream(4096);
         RemoteEndpoint.Async remote = session.getAsyncRemote();
-        Serializable serEvent = pst.transform(event);
         try {
             ObjectOutputStream oos = new ObjectOutputStream(baos);
-            oos.writeObject(serEvent);
+            oos.write(encoder.encode(event));
             oos.flush();
             remote.sendBinary(ByteBuffer.wrap(baos.toByteArray()));
         } catch (IOException ex) {
